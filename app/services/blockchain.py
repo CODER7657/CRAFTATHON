@@ -1,5 +1,6 @@
 import json
 import hashlib
+import time
 from pathlib import Path
 from typing import Any
 
@@ -113,7 +114,8 @@ class BlockchainService:
 
         try:
             function = getattr(self._contract.functions, function_name)(*args)
-            nonce = self._web3.eth.get_transaction_count(self._account.address)
+            # Use pending nonce to avoid collisions when multiple txs are sent in quick succession.
+            nonce = self._web3.eth.get_transaction_count(self._account.address, "pending")
             tx = function.build_transaction(
                 {
                     "from": self._account.address,
@@ -154,7 +156,27 @@ class BlockchainService:
             return self._send_transaction("logAuthorityAction", report_id, action)
         if not self._ready:
             return None
-        return self._send_transaction("logAuthorityAction", report_id, action)
+
+        # The report submission tx may still be pending on Sepolia when an authority
+        # action is attempted immediately afterward. Retry briefly before failing.
+        last_error: AppError | None = None
+        for delay_seconds in (0, 5, 15):
+            if delay_seconds:
+                time.sleep(delay_seconds)
+            try:
+                return self._send_transaction("logAuthorityAction", report_id, action)
+            except AppError as exc:
+                last_error = exc
+                continue
+
+        if last_error is not None:
+            raise last_error
+        raise AppError(
+            code="blockchain_transaction_failed",
+            message="Unable to submit blockchain transaction",
+            status_code=502,
+            details={"function": "logAuthorityAction"},
+        )
 
     def get_report_submitted_events(self, from_block: int, to_block: int | None = None) -> list[dict[str, Any]]:
         if self._mock_mode or not self._ready or self._web3 is None or self._contract is None:

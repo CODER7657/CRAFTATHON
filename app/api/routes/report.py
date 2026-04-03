@@ -11,6 +11,7 @@ from app.services.blockchain import BlockchainService
 from app.services.ipfs import Web3StorageClient
 from app.services.security import verify_zk_proof_hash
 from app.services.supabase_service import SupabaseService
+from app.tasks.classification import classify_report_async
 
 
 router = APIRouter(prefix="/report", tags=["report"])
@@ -73,6 +74,31 @@ async def submit_report(
             "metadata": {"blockchain_tx_hash": tx_hash, "report_id": created.get("id")},
         }
     )
+
+    # For text-only reports, queue classification immediately from backend.
+    # Image submissions are classified by the dedicated classify endpoint once image bytes are available.
+    if payload.attachment is None and not payload.image_cid:
+        try:
+            task = classify_report_async.delay(tracking_id=tracking_id)
+            supabase_service.insert_audit_log(
+                {
+                    "tracking_id": tracking_id,
+                    "actor_type": "system",
+                    "action": "classification_enqueued",
+                    "metadata": {"task_id": getattr(task, "id", None), "mode": "text_only_auto"},
+                }
+            )
+        except Exception as exc:
+            # Submission success should not depend on queue availability.
+            supabase_service.insert_audit_log(
+                {
+                    "tracking_id": tracking_id,
+                    "actor_type": "system",
+                    "action": "classification_enqueue_failed",
+                    "metadata": {"error_type": exc.__class__.__name__, "mode": "text_only_auto"},
+                }
+            )
+
     return SuccessResponse(
         data=ReportSubmitResponse(
             tracking_id=tracking_id,

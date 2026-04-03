@@ -1,15 +1,15 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\ayush\\Downloads\\blockchain dev\\files (1)\\contracts\\POCSORegistry.sol": {
-      "lastModificationDate": 1775195848717,
-      "contentHash": "166d502c84072145368503f998d26ab8",
+    "D:\\craftathon\\backend-ai\\contracts\\POCSORegistry.sol": {
+      "lastModificationDate": 1775231630268,
+      "contentHash": "b1d6f93ce075e736e82c312cdabe18e4",
       "sourceName": "contracts/POCSORegistry.sol",
       "solcConfig": {
         "version": "0.8.20",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "evmVersion": "paris",
@@ -26,9 +26,6 @@
                 "ast"
               ]
             }
-          },
-          "metadata": {
-            "useLiteralContent": false
           }
         }
       },
@@ -43,15 +40,15 @@
         "POCSORegistry"
       ]
     },
-    "C:\\Users\\ayush\\Downloads\\blockchain dev\\files (1)\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
-      "lastModificationDate": 1775194058624,
-      "contentHash": "6e5efb502dd6652d12ad15eea2c5bdf4",
+    "D:\\craftathon\\backend-ai\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
+      "lastModificationDate": 1775230594658,
+      "contentHash": "9a5b0ade82ac3501355a963afda1b081",
       "sourceName": "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
       "solcConfig": {
         "version": "0.8.20",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "evmVersion": "paris",
@@ -68,9 +65,6 @@
                 "ast"
               ]
             }
-          },
-          "metadata": {
-            "useLiteralContent": false
           }
         }
       },
@@ -84,15 +78,15 @@
         "ReentrancyGuard"
       ]
     },
-    "C:\\Users\\ayush\\Downloads\\blockchain dev\\files (1)\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
-      "lastModificationDate": 1775194058611,
-      "contentHash": "d3c790edc9ccf808a17c5a6cd13614fd",
+    "D:\\craftathon\\backend-ai\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
+      "lastModificationDate": 1775230594536,
+      "contentHash": "f665fc4a91af3170f86727fc49cc091f",
       "sourceName": "@openzeppelin/contracts/access/Ownable.sol",
       "solcConfig": {
         "version": "0.8.20",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "evmVersion": "paris",
@@ -109,9 +103,6 @@
                 "ast"
               ]
             }
-          },
-          "metadata": {
-            "useLiteralContent": false
           }
         }
       },
@@ -125,15 +116,15 @@
         "Ownable"
       ]
     },
-    "C:\\Users\\ayush\\Downloads\\blockchain dev\\files (1)\\node_modules\\@openzeppelin\\contracts\\utils\\StorageSlot.sol": {
-      "lastModificationDate": 1775194058659,
-      "contentHash": "e656d64c4ce918f3d13030b91c935134",
+    "D:\\craftathon\\backend-ai\\node_modules\\@openzeppelin\\contracts\\utils\\StorageSlot.sol": {
+      "lastModificationDate": 1775230594658,
+      "contentHash": "c6edb541dfe1cc6e1604dae14d0c57aa",
       "sourceName": "@openzeppelin/contracts/utils/StorageSlot.sol",
       "solcConfig": {
         "version": "0.8.20",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "evmVersion": "paris",
@@ -150,9 +141,6 @@
                 "ast"
               ]
             }
-          },
-          "metadata": {
-            "useLiteralContent": false
           }
         }
       },
@@ -164,15 +152,15 @@
         "StorageSlot"
       ]
     },
-    "C:\\Users\\ayush\\Downloads\\blockchain dev\\files (1)\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
-      "lastModificationDate": 1775194058232,
-      "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
+    "D:\\craftathon\\backend-ai\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
+      "lastModificationDate": 1775230594655,
+      "contentHash": "2783b901218e982baedae531a748ed8d",
       "sourceName": "@openzeppelin/contracts/utils/Context.sol",
       "solcConfig": {
         "version": "0.8.20",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "evmVersion": "paris",
@@ -189,9 +177,6 @@
                 "ast"
               ]
             }
-          },
-          "metadata": {
-            "useLiteralContent": false
           }
         }
       },

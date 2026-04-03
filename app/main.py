@@ -12,10 +12,24 @@ settings = get_settings()
 app = FastAPI(title=settings.app_name, version=settings.app_version, docs_url="/docs", redoc_url="/redoc")
 
 allowed_origins = [origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()]
-allow_all_origins = len(allowed_origins) == 1 and allowed_origins[0] == "*"
+
+# Always allow local frontend origins used during development.
+local_dev_origins = {
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+}
+
+allow_all_origins = "*" in allowed_origins
+
+if not allow_all_origins:
+    allowed_origins = sorted(set(allowed_origins) | local_dev_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins or ["*"],
+    allow_origins=["*"] if allow_all_origins else (allowed_origins or sorted(local_dev_origins)),
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     # Browsers reject credentialed CORS requests with wildcard origins.
     allow_credentials=not allow_all_origins,
     allow_methods=["*"],

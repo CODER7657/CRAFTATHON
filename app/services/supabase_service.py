@@ -1,3 +1,4 @@
+import hashlib
 from typing import Any
 
 from supabase import Client, create_client
@@ -73,15 +74,62 @@ class SupabaseService:
 
     def list_dashboard_cases(self, jurisdiction_code: str | None = None) -> list[dict[str, Any]]:
         if self._mock_store is not None:
-            return self._mock_store.list_reports_by_jurisdiction(jurisdiction_code)
+            rows = self._mock_store.list_reports_by_jurisdiction(jurisdiction_code)
+            hash_map = self._lookup_onchain_hashes([str(r.get("tracking_id") or "") for r in rows])
+            for row in rows:
+                tid = str(row.get("tracking_id") or "")
+                row["onchain_tx_hash"] = hash_map.get(tid)
+            return rows
         assert self.client is not None
         query = self.client.table("reports").select(
-            "tracking_id,jurisdiction_code,status,risk_score,combined_label,created_at"
+            "tracking_id,jurisdiction_code,status,risk_score,combined_label,created_at,authority_action"
         )
         if jurisdiction_code:
             query = query.eq("jurisdiction_code", jurisdiction_code)
         response = query.order("created_at", desc=True).execute()
-        return response.data or []
+        rows = response.data or []
+        hash_map = self._lookup_onchain_hashes([str(r.get("tracking_id") or "") for r in rows])
+        for row in rows:
+            tid = str(row.get("tracking_id") or "")
+            row["onchain_tx_hash"] = hash_map.get(tid)
+        return rows
+
+    def _lookup_onchain_hashes(self, tracking_ids: list[str]) -> dict[str, str]:
+        clean_ids = [tid for tid in tracking_ids if tid]
+        if not clean_ids:
+            return {}
+
+        if self._mock_store is not None:
+            result: dict[str, str] = {}
+            for log in reversed(self._mock_store.audit_logs):
+                tid = str(log.get("tracking_id") or "")
+                if tid not in clean_ids or tid in result:
+                    continue
+                metadata = log.get("metadata") or {}
+                tx_hash = metadata.get("onchain_tx_hash") or metadata.get("blockchain_tx_hash")
+                if isinstance(tx_hash, str) and tx_hash:
+                    result[tid] = tx_hash
+            return result
+
+        assert self.client is not None
+        response = (
+            self.client.table("audit_logs")
+            .select("tracking_id,metadata,created_at")
+            .in_("tracking_id", clean_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        result: dict[str, str] = {}
+        for row in response.data or []:
+            tid = str(row.get("tracking_id") or "")
+            if not tid or tid in result:
+                continue
+            metadata = row.get("metadata") or {}
+            tx_hash = metadata.get("onchain_tx_hash") or metadata.get("blockchain_tx_hash")
+            if isinstance(tx_hash, str) and tx_hash:
+                result[tid] = tx_hash
+        return result
 
     def insert_audit_log(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._mock_store is not None:
@@ -138,7 +186,59 @@ class SupabaseService:
         if self._mock_store is not None:
             return self._mock_store.insert_flagged_domain(payload)
         assert self.client is not None
-        response = self.client.table("flagged_domains").upsert(payload, on_conflict="domain").execute()
+
+        candidates: list[dict[str, Any]] = [payload]
+        # Compatible shape for schema variants that use severity/reason/report_tracking_id.
+        candidates.append(
+            {
+                "domain": payload.get("domain"),
+                "severity": payload.get("severity") or payload.get("label") or "review",
+                "reason": payload.get("reason") or "ai_classification",
+                "report_tracking_id": payload.get("report_tracking_id"),
+                "created_at": payload.get("created_at"),
+            }
+        )
+        # Compatible shape for schema variants that use label/risk_score/reason.
+        candidates.append(
+            {
+                "domain": payload.get("domain"),
+                "label": payload.get("label") or payload.get("severity") or "review",
+                "risk_score": payload.get("risk_score") or 0,
+                "reason": payload.get("reason") or "ai_classification",
+                "created_at": payload.get("created_at"),
+            }
+        )
+
+        for candidate in candidates:
+            try:
+                response = self.client.table("flagged_domains").upsert(candidate, on_conflict="domain").execute()
+                if response.data:
+                    return response.data[0]
+            except Exception:
+                continue
+
+        raise AppError(code="flagged_domain_failed", message="Unable to store flagged domain", status_code=500)
+
+    def get_authority_by_api_key(self, api_key: str) -> dict[str, Any] | None:
+        if self._mock_store is not None:
+            return {
+                "id": "mock-authority-1",
+                "jurisdiction_code": "MOCK-JURISDICTION",
+                "is_active": True,
+                "api_key": api_key,
+            }
+
+        assert self.client is not None
+        hashed_key = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
+        response = (
+            self.client.table("authorities")
+            .select("id,jurisdiction_code,api_key_hash,wallet_address")
+            .eq("api_key_hash", hashed_key)
+            .limit(1)
+            .execute()
+        )
+
         if not response.data:
-            raise AppError(code="flagged_domain_failed", message="Unable to store flagged domain", status_code=500)
+            return None
         return response.data[0]
