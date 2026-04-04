@@ -29,7 +29,7 @@ if not allow_all_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if allow_all_origins else (allowed_origins or sorted(local_dev_origins)),
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"https?://((localhost|127\.0\.0\.1)(:\d+)?|([a-z0-9-]+\.)*vercel\.app)$",
     # Browsers reject credentialed CORS requests with wildcard origins.
     allow_credentials=not allow_all_origins,
     allow_methods=["*"],
