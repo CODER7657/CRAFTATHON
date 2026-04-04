@@ -1,0 +1,157 @@
+services:
+  - type: web
+    name: pocso-web
+    env: python
+    plan: starter
+    rootDir: .
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: API_PREFIX
+        value: /api
+      - key: MOCK_EXTERNAL_SERVICES
+        value: "false"
+      - key: MOCK_AI_MODELS
+        value: "false"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: ZK_VERIFIER_SALT
+        sync: false
+      - key: SODIUM_SECRET_KEY
+        sync: false
+      - key: WEB3_STORAGE_TOKEN
+        sync: false
+      - key: WEB3_STORAGE_UPLOAD_URL
+        sync: false
+      - key: ETHEREUM_RPC_URL
+        sync: false
+      - key: BLOCKCHAIN_CHAIN_ID
+        value: "11155111"
+      - key: SEPOLIA_CONTRACT_ADDRESS
+        sync: false
+      - key: SEPOLIA_CONTRACT_ABI_JSON
+        sync: false
+      - key: AUTHORITY_WALLET_PRIVATE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  - type: worker
+    name: pocso-worker
+    env: python
+    plan: starter
+    rootDir: .
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: celery -A app.celery_app:celery worker --loglevel=INFO --concurrency=2 -n worker@%h
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: API_PREFIX
+        value: /api
+      - key: MOCK_EXTERNAL_SERVICES
+        value: "false"
+      - key: MOCK_AI_MODELS
+        value: "false"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: ZK_VERIFIER_SALT
+        sync: false
+      - key: SODIUM_SECRET_KEY
+        sync: false
+      - key: WEB3_STORAGE_TOKEN
+        sync: false
+      - key: WEB3_STORAGE_UPLOAD_URL
+        sync: false
+      - key: ETHEREUM_RPC_URL
+        sync: false
+      - key: BLOCKCHAIN_CHAIN_ID
+        value: "11155111"
+      - key: SEPOLIA_CONTRACT_ADDRESS
+        sync: false
+      - key: SEPOLIA_CONTRACT_ABI_JSON
+        sync: false
+      - key: AUTHORITY_WALLET_PRIVATE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  - type: worker
+    name: pocso-beat
+    env: python
+    plan: starter
+    rootDir: .
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: celery -A app.celery_app:celery beat --loglevel=INFO
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: API_PREFIX
+        value: /api
+      - key: MOCK_EXTERNAL_SERVICES
+        value: "false"
+      - key: MOCK_AI_MODELS
+        value: "false"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: ZK_VERIFIER_SALT
+        sync: false
+      - key: SODIUM_SECRET_KEY
+        sync: false
+      - key: WEB3_STORAGE_TOKEN
+        sync: false
+      - key: WEB3_STORAGE_UPLOAD_URL
+        sync: false
+      - key: ETHEREUM_RPC_URL
+        sync: false
+      - key: BLOCKCHAIN_CHAIN_ID
+        value: "11155111"
+      - key: SEPOLIA_CONTRACT_ADDRESS
+        sync: false
+      - key: SEPOLIA_CONTRACT_ABI_JSON
+        sync: false
+      - key: AUTHORITY_WALLET_PRIVATE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
