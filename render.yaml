@@ -9,6 +9,8 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
@@ -61,6 +63,8 @@ services:
     startCommand: celery -A app.celery_app:celery worker --loglevel=INFO --concurrency=2 -n worker@%h
     autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
@@ -113,6 +117,8 @@ services:
     startCommand: celery -A app.celery_app:celery beat --loglevel=INFO
     autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
