@@ -135,6 +135,19 @@ $env:PYTHONPATH="D:\craftathon\backend-ai"
 python -m celery -A app.celery_app:celery worker --loglevel=info --pool=solo -n worker@%h
 ```
 
+For a Render-web plus local-worker setup, use the helper script instead of manually exporting env vars:
+
+```powershell
+cd D:\craftathon\backend-ai
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local-worker.ps1
+```
+
+Optional custom node name (avoid duplicate node warnings):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local-worker.ps1 -NodeName "worker-local@my-pc"
+```
+
 ## 6.3 Celery beat (optional but recommended)
 
 ```powershell
