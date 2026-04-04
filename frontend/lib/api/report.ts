@@ -168,7 +168,8 @@ export async function getReportStatus(trackingId: string): Promise<ReportStatusR
 
     const json = await response.json();
     const data = json.data || json;
-    const updatedAt = data.last_updated_at || new Date().toISOString();
+    const createdAt = data.created_at || data.submitted_at || data.last_updated_at || new Date().toISOString();
+    const updatedAt = data.last_updated_at || createdAt;
     const imageMode = data.confidence_explanation?.image?.mode as string | undefined;
     const classificationBasis: ReportStatusResult['classificationBasis'] =
         imageMode === 'none' ? 'text-only' : imageMode ? 'text-and-image' : 'pending';
@@ -176,7 +177,7 @@ export async function getReportStatus(trackingId: string): Promise<ReportStatusR
     return {
         status: mapBackendStatus(data.status || 'review'),
         trackingId: data.tracking_id || trackingId,
-        createdAt: updatedAt,
+        createdAt,
         updatedAt,
         txHash: data.onchain_tx_hash || undefined,
         riskScore: typeof data.risk_score === 'number' ? data.risk_score : undefined,

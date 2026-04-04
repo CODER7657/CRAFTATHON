@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import httpx
+
 from app.celery_app import celery
 from app.core.config import get_settings
 from app.core.errors import AppError
@@ -57,10 +59,19 @@ def apply_classification_result(
         queue_high_priority_alert.delay(tracking_id=tracking_id, risk_score=risk_score, ai_label=combined_label)
 
 
-@celery.task(name="app.tasks.classify_report_async")
-def classify_report_async(tracking_id: str, image_base64: str | None = None, image_content_type: str | None = None) -> dict:
+@celery.task(name="app.tasks.classify_report_async", bind=True, max_retries=5)
+def classify_report_async(
+    self,
+    tracking_id: str,
+    image_base64: str | None = None,
+    image_content_type: str | None = None,
+) -> dict:
     sb = SupabaseService()
-    report = sb.get_report_by_tracking_id(tracking_id)
+    try:
+        report = sb.get_report_by_tracking_id(tracking_id)
+    except httpx.HTTPError as exc:
+        countdown = min(120, 10 * (2**self.request.retries))
+        raise self.retry(exc=exc, countdown=countdown) from exc
     if report is None:
         raise AppError(code="report_not_found", message="Tracking ID not found", status_code=404)
 

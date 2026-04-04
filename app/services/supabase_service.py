@@ -106,7 +106,12 @@ class SupabaseService:
                 if tid not in clean_ids or tid in result:
                     continue
                 metadata = log.get("metadata") or {}
-                tx_hash = metadata.get("onchain_tx_hash") or metadata.get("blockchain_tx_hash")
+                tx_hash = (
+                    metadata.get("onchain_tx_hash")
+                    or metadata.get("blockchain_tx_hash")
+                    or metadata.get("verdict_tx_hash")
+                    or metadata.get("transaction_hash")
+                )
                 if isinstance(tx_hash, str) and tx_hash:
                     result[tid] = tx_hash
             return result
@@ -126,7 +131,12 @@ class SupabaseService:
             if not tid or tid in result:
                 continue
             metadata = row.get("metadata") or {}
-            tx_hash = metadata.get("onchain_tx_hash") or metadata.get("blockchain_tx_hash")
+            tx_hash = (
+                metadata.get("onchain_tx_hash")
+                or metadata.get("blockchain_tx_hash")
+                or metadata.get("verdict_tx_hash")
+                or metadata.get("transaction_hash")
+            )
             if isinstance(tx_hash, str) and tx_hash:
                 result[tid] = tx_hash
         return result
