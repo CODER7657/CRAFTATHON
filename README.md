@@ -6,7 +6,7 @@ Anonymous child safety reporting platform with:
 - Jurisdiction-scoped authority dashboard and action workflow
 - AI classification pipeline for text and image inputs
 - Blockchain audit trail for report and authority actions
-- Supabase persistence, Celery async tasks, and live dashboard polling
+- PostgreSQL persistence, Celery async tasks, and live dashboard polling
 
 This repository contains three major layers in one workspace:
 
@@ -19,7 +19,7 @@ This repository contains three major layers in one workspace:
 ### Core flow
 
 1. Reporter submits an incident (`/api/report/submit`) with jurisdiction and ZK proof hash.
-2. Backend stores report in Supabase and logs blockchain report hash transaction.
+2. Backend stores report in PostgreSQL and logs blockchain report hash transaction.
 3. AI classification runs:
    - Text-only reports are auto-queued from submit endpoint.
    - Image reports are classified via `/api/ai/classify` when image bytes are provided.
@@ -38,7 +38,7 @@ This repository contains three major layers in one workspace:
 |---|---|
 | Backend API | FastAPI, Pydantic, Uvicorn, Gunicorn |
 | Async tasks | Celery + Redis (broker/result backend) |
-| Database | Supabase (Postgres) |
+| Database | PostgreSQL (self-hosted or managed) |
 | AI | Transformers, Torch, optional TensorFlow image path |
 | Frontend | Next.js 14, React 18, TypeScript, Tailwind |
 | Blockchain | Solidity 0.8.x, Hardhat, OpenZeppelin |
@@ -47,15 +47,15 @@ This repository contains three major layers in one workspace:
 ## 3. Repository Layout
 
 ```text
-backend-ai/
-  app/                    # FastAPI app, services, schemas, tasks
-  frontend/               # Next.js app router project
-  contracts/              # Solidity contracts
-  scripts/                # Hardhat scripts (deploy, authority assignment)
-  tests/                  # Backend smoke tests
-  supabase_sql/schema.sql # DB schema and policies
-  Procfile                # process definitions (web, worker, beat)
-  railway.json            # Railway web service config
+app/                            # FastAPI app, services, schemas, tasks
+frontend/                       # Next.js app router project
+contracts/                      # Solidity contracts
+scripts/                        # Hardhat scripts (deploy, authority assignment)
+tests/                          # Backend smoke tests
+supabase_sql/schema_postgres.sql # Postgres schema for local/docker DB init
+docker-compose.yml              # Local full-stack orchestration
+Procfile                        # process definitions (web, worker, beat)
+railway.json                    # Railway web service config
 ```
 
 ## 4. Prerequisites
@@ -64,7 +64,7 @@ backend-ai/
 - Node.js 18+ and npm
 - Git
 - Redis/Upstash credentials
-- Supabase project (URL + service role key)
+- PostgreSQL database (local Docker Postgres or managed Postgres)
 - Sepolia RPC key and deployed contract details
 
 ## 5. Environment Setup
@@ -79,8 +79,7 @@ cp .env.example .env
 
 2. Fill required values in `.env`:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_KEY`
+- `POSTGRES_URL`
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `ZK_VERIFIER_SALT`
@@ -95,6 +94,8 @@ Recommended for local:
 
 - `MOCK_EXTERNAL_SERVICES=false`
 - `MOCK_AI_MODELS=false` (or `true` for lightweight local tests)
+
+If running with Docker Compose, `POSTGRES_URL`, Redis URLs, and service wiring are already provided in `docker-compose.yml`; your `.env` is mainly for secrets and optional overrides.
 
 ## 5.2 Frontend env
 
@@ -115,30 +116,50 @@ node -e "const {randomBytes,scryptSync}=require('crypto'); const salt=randomByte
 
 ## 6. Local Development
 
+### 6.0 Quick start (recommended)
+
+```powershell
+cd D:\CRAFTATHON2\CRAFTATHON
+docker compose up -d --build
+```
+
+App URLs:
+
+- Frontend: `http://10.0.0.2:3000`
+- Backend docs: `http://10.0.0.2:8010/docs`
+
+Use this to inspect service status:
+
+```powershell
+docker compose ps
+```
+
+### 6.1 Run components manually (without Docker)
+
 Run services in separate terminals.
 
 ## 6.1 Backend API
 
 ```powershell
-cd D:\craftathon\backend-ai
+cd D:\CRAFTATHON2\CRAFTATHON
 .\.venv\Scripts\Activate.ps1
-$env:PYTHONPATH="D:\craftathon\backend-ai"
+$env:PYTHONPATH="D:\CRAFTATHON2\CRAFTATHON"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 --reload
 ```
 
 ## 6.2 Celery worker
 
 ```powershell
-cd D:\craftathon\backend-ai
+cd D:\CRAFTATHON2\CRAFTATHON
 .\.venv\Scripts\Activate.ps1
-$env:PYTHONPATH="D:\craftathon\backend-ai"
+$env:PYTHONPATH="D:\CRAFTATHON2\CRAFTATHON"
 python -m celery -A app.celery_app:celery worker --loglevel=info --pool=solo -n worker@%h
 ```
 
 For a Render-web plus local-worker setup, use the helper script instead of manually exporting env vars:
 
 ```powershell
-cd D:\craftathon\backend-ai
+cd D:\CRAFTATHON2\CRAFTATHON
 powershell -ExecutionPolicy Bypass -File .\scripts\start-local-worker.ps1
 ```
 
@@ -151,16 +172,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local-worker.ps1 -NodeN
 ## 6.3 Celery beat (optional but recommended)
 
 ```powershell
-cd D:\craftathon\backend-ai
+cd D:\CRAFTATHON2\CRAFTATHON
 .\.venv\Scripts\Activate.ps1
-$env:PYTHONPATH="D:\craftathon\backend-ai"
+$env:PYTHONPATH="D:\CRAFTATHON2\CRAFTATHON"
 python -m celery -A app.celery_app:celery beat --loglevel=info
 ```
 
 ## 6.4 Frontend
 
 ```powershell
-cd D:\craftathon\backend-ai\frontend
+cd D:\CRAFTATHON2\CRAFTATHON\frontend
 npm install
 npm run dev
 ```
@@ -205,9 +226,17 @@ Assign authority wallet on-chain:
 npx hardhat run scripts/assignAuthority.ts --network sepolia
 ```
 
-## 9. Database Setup (Supabase)
+## 9. Database Setup (PostgreSQL)
 
-Run SQL from `supabase_sql/schema.sql` in Supabase SQL editor.
+For Docker local setup, schema and seed run automatically on first DB container start:
+
+- `supabase_sql/schema_postgres.sql`
+- `supabase_sql/seed_authorities_dev.sql`
+
+If using an existing DB volume and you need to apply/update seed manually:
+
+- Bash: `docker compose exec -T db psql -U postgres -d pocso < supabase_sql/seed_authorities_dev.sql`
+- PowerShell: `Get-Content -Raw supabase_sql/seed_authorities_dev.sql | docker compose exec -T db psql -U postgres -d pocso`
 
 Tables created:
 
@@ -220,8 +249,7 @@ Includes:
 
 - indexes
 - update trigger
-- RLS policies
-- service-role full access policies for backend integration
+- indexes and triggers used by backend services
 
 ## 10. Testing
 
@@ -252,7 +280,7 @@ npm run build
 - Backend API: Railway service `web`
 - Celery worker: Railway service `worker`
 - Celery beat: Railway service `beat`
-- DB: Supabase
+- DB: PostgreSQL (Supabase Postgres or Railway Postgres)
 - Redis broker/backend: Upstash Redis
 
 ## 11.0 Frontend Deployment (Vercel)
@@ -350,7 +378,7 @@ The browser session sends `AUTH_USER_1_AUTHORITY_API_KEY` as `X-Authority-Api-Ke
 
 - Never commit `.env` or `.env.local`.
 - Rotate any exposed keys immediately.
-- Keep service-role and wallet keys in backend-only secret stores.
+- Keep DB credentials and wallet keys in backend-only secret stores.
 - Use HTTPS and strict CORS in production.
 - Enforce jurisdiction scoping at API layer (already implemented).
 
