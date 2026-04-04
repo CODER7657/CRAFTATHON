@@ -122,7 +122,7 @@ export async function submitReport(params: SubmitReportParams): Promise<string> 
     if (params.file) {
         try {
             const imageBase64 = await fileToBase64(params.file);
-            await fetch(`${apiBase}/api/ai/classify?sync=true`, {
+            await fetch(`${apiBase}/api/ai/classify`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
