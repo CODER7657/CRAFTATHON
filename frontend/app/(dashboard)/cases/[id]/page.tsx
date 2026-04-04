@@ -3,6 +3,7 @@ import CaseActions from '@/components/dashboard/CaseActions';
 import { Shield, Clock, AlertTriangle, Cpu } from 'lucide-react';
 import { cookies } from 'next/headers';
 import { AUTH_SESSION_COOKIE, getAuthorityFromToken } from '@/lib/auth/session';
+import { formatDateTimeOrFallback } from '@/lib/date';
 
 type DashboardCase = {
   tracking_id: string;
@@ -156,7 +157,7 @@ export default async function CaseDetailPage(props: { params: Promise<{ id: stri
               <p className="text-xs font-mono text-navy-400 mt-0.5">{caseRow.tracking_id}</p>
               <div className="flex items-center gap-2 mt-2 text-xs text-navy-400">
                 <Clock className="w-3.5 h-3.5" />
-                Submitted: {new Date(caseRow.created_at).toLocaleString()}
+                Submitted: {formatDateTimeOrFallback(caseRow.created_at)}
               </div>
             </div>
           </div>

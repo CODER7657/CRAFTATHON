@@ -75,29 +75,32 @@ async def submit_report(
         }
     )
 
-    # For text-only reports, queue classification immediately from backend.
-    # Image submissions are classified by the dedicated classify endpoint once image bytes are available.
-    if payload.attachment is None and not payload.image_cid:
-        try:
-            task = classify_report_async.delay(tracking_id=tracking_id)
-            supabase_service.insert_audit_log(
-                {
-                    "tracking_id": tracking_id,
-                    "actor_type": "system",
-                    "action": "classification_enqueued",
-                    "metadata": {"task_id": getattr(task, "id", None), "mode": "text_only_auto"},
-                }
-            )
-        except Exception as exc:
-            # Submission success should not depend on queue availability.
-            supabase_service.insert_audit_log(
-                {
-                    "tracking_id": tracking_id,
-                    "actor_type": "system",
-                    "action": "classification_enqueue_failed",
-                    "metadata": {"error_type": exc.__class__.__name__, "mode": "text_only_auto"},
-                }
-            )
+    # Always enqueue a baseline text classification from backend so reports never
+    # remain indefinitely in "submitted" if client-side classify trigger fails.
+    try:
+        task = classify_report_async.delay(tracking_id=tracking_id)
+        supabase_service.insert_audit_log(
+            {
+                "tracking_id": tracking_id,
+                "actor_type": "system",
+                "action": "classification_enqueued",
+                "metadata": {
+                    "task_id": getattr(task, "id", None),
+                    "mode": "text_only_auto",
+                    "has_client_attachment": bool(payload.attachment or payload.image_cid),
+                },
+            }
+        )
+    except Exception as exc:
+        # Submission success should not depend on queue availability.
+        supabase_service.insert_audit_log(
+            {
+                "tracking_id": tracking_id,
+                "actor_type": "system",
+                "action": "classification_enqueue_failed",
+                "metadata": {"error_type": exc.__class__.__name__, "mode": "text_only_auto"},
+            }
+        )
 
     return SuccessResponse(
         data=ReportSubmitResponse(
@@ -117,6 +120,7 @@ async def get_report_status(
     report = supabase_service.get_report_by_tracking_id(tracking_id)
     if not report:
         raise AppError(code="report_not_found", message="Tracking ID not found", status_code=404)
+    onchain_tx_hash = supabase_service.get_onchain_tx_hash(tracking_id)
     return SuccessResponse(
         data=ReportStatusResponse(
             tracking_id=tracking_id,
@@ -124,7 +128,9 @@ async def get_report_status(
             risk_score=report.get("risk_score"),
             ai_label=report.get("combined_label"),
             authority_action=report.get("authority_action"),
+            created_at=report.get("created_at"),
             last_updated_at=report.get("updated_at") or report.get("created_at"),
+            onchain_tx_hash=onchain_tx_hash,
             confidence_explanation=report.get("ai_explanation") or report.get("metadata", {}).get("confidence_explanation"),
         )
     )

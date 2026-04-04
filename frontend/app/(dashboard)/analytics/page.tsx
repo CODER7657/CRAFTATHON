@@ -2,6 +2,7 @@ import AnalyticsCharts from '@/components/dashboard/AnalyticsCharts';
 import { BarChart3 } from 'lucide-react';
 import { cookies } from 'next/headers';
 import { AUTH_SESSION_COOKIE, getAuthorityFromToken } from '@/lib/auth/session';
+import { toIsoDateOrFallback } from '@/lib/date';
 
 type AnalyticsCase = {
   status: string;
@@ -74,7 +75,7 @@ export default async function AnalyticsPage() {
   }, {});
 
   const casesByDate = cases.reduce((acc: any, curr: any) => {
-    const d = new Date(curr.created_at).toISOString().split('T')[0];
+    const d = toIsoDateOrFallback(curr.created_at);
     acc[d] = (acc[d] || 0) + 1;
     return acc;
   }, {});

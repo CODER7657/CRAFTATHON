@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { ExternalLink, LinkIcon, Filter } from 'lucide-react';
+import { formatDateOrFallback, parseDateSafely } from '@/lib/date';
 
 type Case = {
   tracking_id: string;
@@ -23,12 +24,14 @@ export default function CasesTable({ cases }: { cases: Case[] }) {
       if (filterStatus !== 'all' && c.status !== filterStatus) return false;
       
       if (filterDate === '7days') {
-        const rowDate = new Date(c.created_at);
+        const rowDate = parseDateSafely(c.created_at);
+        if (!rowDate) return false;
         const limit = new Date();
         limit.setDate(limit.getDate() - 7);
         if (rowDate < limit) return false;
       } else if (filterDate === '30days') {
-        const rowDate = new Date(c.created_at);
+        const rowDate = parseDateSafely(c.created_at);
+        if (!rowDate) return false;
         const limit = new Date();
         limit.setDate(limit.getDate() - 30);
         if (rowDate < limit) return false;
@@ -120,7 +123,7 @@ export default function CasesTable({ cases }: { cases: Case[] }) {
             {filteredCases.map(c => (
               <tr key={c.tracking_id}>
                 <td className="font-mono text-xs text-navy-600 font-medium">{c.tracking_id.substring(0, 8)}...</td>
-                <td className="text-navy-600">{new Date(c.created_at).toLocaleDateString()}</td>
+                <td className="text-navy-600">{formatDateOrFallback(c.created_at)}</td>
                 <td>
                   <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-2.5 py-1 rounded-lg text-xs font-bold ${getRiskColor(Number(c.risk_score || 0))}`}>
                     {Number(c.risk_score || 0)}

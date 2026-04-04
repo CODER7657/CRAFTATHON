@@ -43,5 +43,7 @@ class ReportStatusResponse(APIModel):
     risk_score: int | None = None
     ai_label: RiskLabel | None = None
     authority_action: str | None = None
+    created_at: datetime | None = None
     last_updated_at: datetime | None = None
+    onchain_tx_hash: str | None = None
     confidence_explanation: dict[str, Any] | None = None

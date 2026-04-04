@@ -72,8 +72,16 @@ def classify_report_async(
     except httpx.HTTPError as exc:
         countdown = min(120, 10 * (2**self.request.retries))
         raise self.retry(exc=exc, countdown=countdown) from exc
+
     if report is None:
-        raise AppError(code="report_not_found", message="Tracking ID not found", status_code=404)
+        # Do not raise custom/retied errors for not-found records; this runs in a worker
+        # context where API-style errors create noisy reject loops.
+        return {
+            "tracking_id": tracking_id,
+            "status": "skipped",
+            "reason": "report_not_found",
+            "risk_score": 0,
+        }
 
     sb.update_report(tracking_id, {"status": "processing", "updated_at": datetime.now(UTC).isoformat()})
 

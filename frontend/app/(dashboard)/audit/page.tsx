@@ -1,6 +1,7 @@
 import { ScrollText, Shield, ExternalLink } from 'lucide-react';
 import { cookies } from 'next/headers';
 import { AUTH_SESSION_COOKIE, getAuthorityFromToken } from '@/lib/auth/session';
+import { formatDateTimeOrFallback } from '@/lib/date';
 
 type AuditLog = {
   id: string;
@@ -93,7 +94,7 @@ export default async function AuditPage() {
             <tbody>
               {logs.map((log) => (
                 <tr key={log.id}>
-                  <td className="text-navy-500 text-sm whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
+                  <td className="text-navy-500 text-sm whitespace-nowrap">{formatDateTimeOrFallback(log.created_at)}</td>
                   <td className="font-semibold text-navy-700 text-sm">{log.authority_name}</td>
                   <td>
                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-navy-50 border border-navy-100 text-navy-600 text-[10px] uppercase tracking-wider font-bold">

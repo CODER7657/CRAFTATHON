@@ -1,6 +1,9 @@
 import hashlib
+import time
+from collections.abc import Callable
 from typing import Any
 
+import httpx
 from supabase import Client, create_client
 
 from app.core.config import get_settings
@@ -23,6 +26,25 @@ class SupabaseService:
             self.client = None
             return
         self.client: Client | None = create_client(settings.supabase_url, settings.supabase_service_key)
+
+    def _execute_with_retry(self, operation: Callable[[], Any], *, attempts: int = 3) -> Any:
+        last_error: Exception | None = None
+        for index in range(attempts):
+            try:
+                return operation()
+            except httpx.HTTPError as exc:
+                last_error = exc
+                if index < attempts - 1:
+                    time.sleep(0.4 * (index + 1))
+            except Exception:
+                raise
+
+        raise AppError(
+            code="supabase_unreachable",
+            message="Supabase is temporarily unreachable",
+            status_code=503,
+            details={"error_type": (last_error.__class__.__name__ if last_error else "HTTPError")},
+        )
 
     def insert_report(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._mock_store is not None:
@@ -86,7 +108,7 @@ class SupabaseService:
         )
         if jurisdiction_code:
             query = query.eq("jurisdiction_code", jurisdiction_code)
-        response = query.order("created_at", desc=True).execute()
+        response = self._execute_with_retry(lambda: query.order("created_at", desc=True).execute())
         rows = response.data or []
         hash_map = self._lookup_onchain_hashes([str(r.get("tracking_id") or "") for r in rows])
         for row in rows:
@@ -117,12 +139,14 @@ class SupabaseService:
             return result
 
         assert self.client is not None
-        response = (
-            self.client.table("audit_logs")
-            .select("tracking_id,metadata,created_at")
-            .in_("tracking_id", clean_ids)
-            .order("created_at", desc=True)
-            .execute()
+        response = self._execute_with_retry(
+            lambda: (
+                self.client.table("audit_logs")
+                .select("tracking_id,metadata,created_at")
+                .in_("tracking_id", clean_ids)
+                .order("created_at", desc=True)
+                .execute()
+            )
         )
 
         result: dict[str, str] = {}
@@ -140,6 +164,9 @@ class SupabaseService:
             if isinstance(tx_hash, str) and tx_hash:
                 result[tid] = tx_hash
         return result
+
+    def get_onchain_tx_hash(self, tracking_id: str) -> str | None:
+        return self._lookup_onchain_hashes([tracking_id]).get(tracking_id)
 
     def insert_audit_log(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._mock_store is not None:
@@ -241,12 +268,14 @@ class SupabaseService:
         assert self.client is not None
         hashed_key = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
 
-        response = (
-            self.client.table("authorities")
-            .select("id,jurisdiction_code,api_key_hash,wallet_address")
-            .eq("api_key_hash", hashed_key)
-            .limit(1)
-            .execute()
+        response = self._execute_with_retry(
+            lambda: (
+                self.client.table("authorities")
+                .select("id,jurisdiction_code,api_key_hash,wallet_address")
+                .eq("api_key_hash", hashed_key)
+                .limit(1)
+                .execute()
+            )
         )
 
         if not response.data:

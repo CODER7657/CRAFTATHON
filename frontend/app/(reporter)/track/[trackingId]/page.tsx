@@ -1,6 +1,7 @@
 import { getReportStatus } from '@/lib/api/report';
 import Link from 'next/link';
 import { Shield, Clock, CheckCircle2, Search, Users, FileCheck, ArrowLeft, Home } from 'lucide-react';
+import { formatDateTimeOrFallback } from '@/lib/date';
 
 export default async function TrackingPage(props: { params: Promise<{ trackingId: string }> }) {
     const { trackingId } = await props.params;
@@ -140,7 +141,7 @@ export default async function TrackingPage(props: { params: Promise<{ trackingId
                     </div>
                     <div className="flex items-center justify-between text-sm">
                         <span className="text-navy-400 text-xs font-semibold uppercase tracking-wider">Created</span>
-                        <span className="text-navy-700 font-medium">{new Date(statusInfo.createdAt).toLocaleString()}</span>
+                        <span className="text-navy-700 font-medium">{formatDateTimeOrFallback(statusInfo.createdAt)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                         <span className="text-navy-400 text-xs font-semibold uppercase tracking-wider">Integrity</span>
