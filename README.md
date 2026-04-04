@@ -255,6 +255,24 @@ npm run build
 - DB: Supabase
 - Redis broker/backend: Upstash Redis
 
+## 11.0 Frontend Deployment (Vercel)
+
+If deploying frontend separately on Vercel:
+
+1. Import the repository into Vercel.
+2. Set project Root Directory to `frontend`.
+3. Build command: `npm run build`.
+4. Output and framework can stay auto-detected for Next.js.
+5. Add environment variables from `frontend/.env.production.example`.
+6. Set `NEXT_PUBLIC_API_BASE_URL` to your Render web backend URL.
+7. Deploy.
+
+Notes:
+
+- Do not commit real `.env.local` or production secrets.
+- `AUTH_SESSION_SECRET` is mandatory for authority login routes.
+- `NEXT_PUBLIC_ZK_VERIFIER_SALT` must match backend `ZK_VERIFIER_SALT`.
+
 ## 11.2 Railway start commands
 
 - Web:
