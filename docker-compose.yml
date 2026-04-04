@@ -1,0 +1,114 @@
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - pocso-net
+    volumes:
+      - redis-data:/data
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=pocso
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./supabase_sql/schema_postgres.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./supabase_sql/seed_authorities_dev.sql:/docker-entrypoint-initdb.d/02_seed_authorities.sql
+    networks:
+      - pocso-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8010 --reload
+    volumes:
+      - .:/app
+    ports:
+      - "10.0.0.2:8010:8010"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_URL=postgresql://postgres:postgres@db:5432/pocso
+    env_file:
+      - .env
+    networks:
+      - pocso-net
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app:celery worker --loglevel=info --concurrency=2 -n worker@%h
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    networks:
+      - pocso-net
+    depends_on:
+      - redis
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app:celery beat --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    networks:
+      - pocso-net
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "10.0.0.2:3000:3000"
+    environment:
+      - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_API_BASE_URL=https://craft.0.xeze.org/api
+      # Server-side dashboard/API calls: reach FastAPI on Docker network (do not use public URL from inside the container).
+      - INTERNAL_API_URL=http://api:8010/api
+      # Align reporter submissions with seeded demo authority (AUTH_USER_*_JURISDICTION=MOCK-JURISDICTION).
+      - NEXT_PUBLIC_REPORT_JURISDICTION_OVERRIDE=MOCK-JURISDICTION
+      - NEXT_PUBLIC_ZK_VERIFIER_SALT=4ca774223f07fd554e8fc77987de7c5643d1142f05d2616d94911702af49758f
+    env_file:
+      - ./frontend/.env.local
+    networks:
+      - pocso-net
+    depends_on:
+      - api
+
+networks:
+  pocso-net:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:

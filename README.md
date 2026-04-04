@@ -305,8 +305,27 @@ celery -A app.celery_app:celery beat --loglevel=INFO
 
 ## Case not visible in dashboard
 
-- Check case `jurisdiction_code` vs logged-in authority jurisdiction.
+- The API lists cases with `WHERE jurisdiction_code = <authority jurisdiction>`. Reporter flow sends `IN-STATE-CITY` from the form unless overridden.
+- If the portal user is `MOCK-JURISDICTION` (demo seed) but reports were stored as e.g. `IN-MH-MUMBAI`, the dashboard stays empty. Fix: set `NEXT_PUBLIC_REPORT_JURISDICTION_OVERRIDE=MOCK-JURISDICTION` on the **frontend** (see `docker-compose.yml`), rebuild Next.js, then submit again—or `UPDATE public.reports SET jurisdiction_code = 'MOCK-JURISDICTION' WHERE tracking_id = '…'` for a one-off test row.
 - Check authority API key mapping in `authorities` table.
+
+## Dashboard: Blockchain column “Unavailable”
+
+The link is built from `audit_logs.metadata` (`blockchain_tx_hash`, `verdict_tx_hash`, or `transaction_hash`). Ensure:
+
+- **Worker is running** — after classification, the worker may anchor `submitReport` (if the API had no hash) and log `logAuthorityAction` for `ai_verdict:*`, which writes those fields.
+- **Chain config in API `.env`** — `ETHEREUM_RPC_URL` or `INFURA_API_KEY`, `SEPOLIA_CONTRACT_ADDRESS`, `SEPOLIA_CONTRACT_ABI_JSON`, and `AUTHORITY_WALLET_PRIVATE_KEY` (funded on Sepolia). If the service is not ready, txs are skipped and the column stays empty.
+- **Existing cases** classified before this behavior shipped will not gain hashes until you submit a new report or re-run classification for that `tracking_id`.
+
+## Authority portal: `invalid_authority_key` (401)
+
+The browser session sends `AUTH_USER_1_AUTHORITY_API_KEY` as `X-Authority-Api-Key`. With `MOCK_EXTERNAL_SERVICES=false`, Postgres must contain a row in `public.authorities` whose `api_key_hash` is `SHA256(plain_key)` (hex).
+
+- **New Docker DB:** `docker-compose` runs `supabase_sql/seed_authorities_dev.sql` after the schema (default key `mock-authority-key`, jurisdiction `MOCK-JURISDICTION`).
+- **Existing volume (no re-seed):** apply the seed once from the repo root:
+  - Bash: `docker compose exec -T db psql -U postgres -d pocso < supabase_sql/seed_authorities_dev.sql`
+  - PowerShell: `Get-Content -Raw supabase_sql/seed_authorities_dev.sql | docker compose exec -T db psql -U postgres -d pocso`
+- **`MOCK_EXTERNAL_SERVICES=true`** makes the API use an in-memory mock for **all** persistence (not only authority keys). Use it only for smoke tests without Postgres; for a real DB, keep `false` and seed `authorities` as above.
 
 ## CORS error from frontend
 

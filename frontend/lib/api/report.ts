@@ -1,3 +1,5 @@
+import { getPublicApiBaseUrl } from '@/lib/backend-url';
+
 export type ReportStatusResult = {
     status: 'Submitted' | 'AI Review' | 'Authority Assigned' | 'Resolved';
     trackingId: string;
@@ -6,7 +8,7 @@ export type ReportStatusResult = {
     txHash?: string;
     riskScore?: number;
     aiLabel?: 'safe' | 'review' | 'harmful';
-    classificationBasis?: 'text-only' | 'text-and-image' | 'pending';
+    classificationBasis?: 'text-only' | 'text-and-image' | 'pending' | 'failed' | 'incomplete';
 };
 
 export type SubmitReportParams = {
@@ -18,11 +20,7 @@ export type SubmitReportParams = {
 };
 
 function getApiBaseUrl(): string {
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (!base) {
-        throw new Error('NEXT_PUBLIC_API_BASE_URL is not configured');
-    }
-    return base.replace(/\/$/, '');
+    return getPublicApiBaseUrl();
 }
 
 function bytesToHex(bytes: Uint8Array): string {
@@ -86,7 +84,7 @@ export async function submitReport(params: SubmitReportParams): Promise<string> 
         },
     };
 
-    const response = await fetch(`${apiBase}/api/report/submit`, {
+    const response = await fetch(`${apiBase}/report/submit`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -113,30 +111,58 @@ export async function submitReport(params: SubmitReportParams): Promise<string> 
     }
 
     const resJson = await response.json();
-    const trackingId = resJson.data?.tracking_id || resJson.tracking_id || resJson.trackingId;
+    let submitData = resJson.data ?? resJson;
+    if (
+        submitData &&
+        typeof submitData === 'object' &&
+        'data' in submitData &&
+        submitData.data &&
+        typeof submitData.data === 'object' &&
+        'tracking_id' in (submitData.data as object)
+    ) {
+        submitData = submitData.data as typeof submitData;
+    }
+    const trackingId =
+        (submitData as { tracking_id?: string })?.tracking_id ||
+        resJson.tracking_id ||
+        resJson.trackingId;
     if (!trackingId) {
         throw new Error('Backend did not return tracking_id');
     }
 
-    // Trigger async classification with complainant-provided image when available.
+    // Run classification in the API process (sync) so scores exist before the user opens the track page.
+    // Celery-only flows often leave risk_score at 0 when no worker is running.
+    let imageBase64: string | null = null;
+    let imageContentType: string | null = null;
     if (params.file) {
         try {
-            const imageBase64 = await fileToBase64(params.file);
-            await fetch(`${apiBase}/api/ai/classify`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    tracking_id: trackingId,
-                    image_base64: imageBase64,
-                    image_content_type: params.file.type || 'application/octet-stream',
-                }),
-            });
+            imageBase64 = await fileToBase64(params.file);
+            imageContentType = params.file.type || 'application/octet-stream';
         } catch (e) {
-            // Report submission should not fail if classify trigger fails.
-            console.warn('Classification trigger failed:', e);
+            console.warn('Could not read file for classification:', e);
         }
+    }
+
+    const controller = new AbortController();
+    const classifyTimeout = setTimeout(() => controller.abort(), 120_000);
+    try {
+            const classifyRes = await fetch(`${apiBase}/ai/classify?sync=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tracking_id: trackingId,
+                image_base64: imageBase64,
+                image_content_type: imageContentType,
+            }),
+            signal: controller.signal,
+        });
+        if (!classifyRes.ok) {
+            console.warn('Sync classification returned', classifyRes.status);
+        }
+    } catch (e) {
+        console.warn('Sync classification failed:', e);
+    } finally {
+        clearTimeout(classifyTimeout);
     }
 
     return trackingId;
@@ -158,7 +184,7 @@ export async function getReportStatus(trackingId: string): Promise<ReportStatusR
         };
     }
 
-    const response = await fetch(`${getApiBaseUrl()}/api/report/status/${trackingId}`, {
+    const response = await fetch(`${getApiBaseUrl()}/report/status/${trackingId}`, {
         cache: 'no-store'
     });
 
@@ -167,12 +193,61 @@ export async function getReportStatus(trackingId: string): Promise<ReportStatusR
     }
 
     const json = await response.json();
-    const data = json.data || json;
+    let data = json.data ?? json;
+    if (
+        data &&
+        typeof data === 'object' &&
+        'data' in data &&
+        data.data &&
+        typeof data.data === 'object' &&
+        'tracking_id' in (data.data as object)
+    ) {
+        data = data.data as typeof data;
+    }
     const createdAt = data.created_at || data.submitted_at || data.last_updated_at || new Date().toISOString();
     const updatedAt = data.last_updated_at || createdAt;
-    const imageMode = data.confidence_explanation?.image?.mode as string | undefined;
-    const classificationBasis: ReportStatusResult['classificationBasis'] =
-        imageMode === 'none' ? 'text-only' : imageMode ? 'text-and-image' : 'pending';
+
+    let expl = data.confidence_explanation as Record<string, unknown> | string | null | undefined;
+    if (typeof expl === 'string') {
+        try {
+            expl = JSON.parse(expl) as Record<string, unknown>;
+        } catch {
+            expl = undefined;
+        }
+    }
+
+    const rawStatus = (typeof data.status === 'string' ? data.status : '').toLowerCase();
+    const imageBlock = expl?.image;
+    const textBlock = expl?.text;
+    const imageMode =
+        imageBlock && typeof imageBlock === 'object' && imageBlock !== null
+            ? String((imageBlock as { mode?: unknown }).mode ?? '')
+            : '';
+    const textMode =
+        textBlock && typeof textBlock === 'object' && textBlock !== null
+            ? String((textBlock as { mode?: unknown }).mode ?? '')
+            : '';
+
+    let classificationBasis: ReportStatusResult['classificationBasis'] = 'pending';
+    if (expl && typeof expl.error === 'string') {
+        classificationBasis = 'failed';
+    } else if (imageMode === 'none') {
+        classificationBasis = 'text-only';
+    } else if (imageMode) {
+        classificationBasis = 'text-and-image';
+    } else if (textMode) {
+        classificationBasis = 'text-only';
+    } else if (['review', 'flagged', 'assigned', 'resolved'].includes(rawStatus)) {
+        classificationBasis = 'incomplete';
+    }
+
+    const rs = data.risk_score;
+    let riskScore: number | undefined;
+    if (typeof rs === 'number' && !Number.isNaN(rs)) {
+        riskScore = rs;
+    } else if (typeof rs === 'string' && rs.trim() !== '' && !Number.isNaN(Number(rs))) {
+        riskScore = Number(rs);
+    }
 
     return {
         status: mapBackendStatus(data.status || 'review'),
@@ -180,7 +255,7 @@ export async function getReportStatus(trackingId: string): Promise<ReportStatusR
         createdAt,
         updatedAt,
         txHash: data.onchain_tx_hash || undefined,
-        riskScore: typeof data.risk_score === 'number' ? data.risk_score : undefined,
+        riskScore,
         aiLabel: data.ai_label || undefined,
         classificationBasis,
     };

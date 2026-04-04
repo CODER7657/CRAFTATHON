@@ -10,7 +10,7 @@ export default function DashboardSidebar() {
   const { name, role, jurisdiction } = useRole();
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/portal/auth/logout', { method: 'POST' });
     router.push('/login');
     router.refresh();
   };

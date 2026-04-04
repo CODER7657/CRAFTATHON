@@ -2,6 +2,7 @@ import AnalyticsCharts from '@/components/dashboard/AnalyticsCharts';
 import { BarChart3 } from 'lucide-react';
 import { cookies } from 'next/headers';
 import { AUTH_SESSION_COOKIE, getAuthorityFromToken } from '@/lib/auth/session';
+import { getBackendApiUrl } from '@/lib/backend-url';
 import { toIsoDateOrFallback } from '@/lib/date';
 
 type AnalyticsCase = {
@@ -22,7 +23,7 @@ function normalizeStatus(status: string | null | undefined): string {
 }
 
 export default async function AnalyticsPage() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8010';
+  const apiBase = getBackendApiUrl();
   const token = cookies().get(AUTH_SESSION_COOKIE)?.value;
   const account = getAuthorityFromToken(token);
   
@@ -38,7 +39,7 @@ export default async function AnalyticsPage() {
   }
 
   try {
-    const res = await fetch(`${apiBase}/api/dashboard/cases`, {
+    const res = await fetch(`${apiBase}/dashboard/cases`, {
        headers: {
          'X-Authority-Api-Key': account.authorityApiKey,
        },

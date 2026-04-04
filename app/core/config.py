@@ -12,9 +12,7 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api"
 
-    supabase_url: str = Field(default="")
-    supabase_anon_key: str = Field(default="")
-    supabase_service_key: str = Field(default="")
+    postgres_url: str = Field(default="postgresql://postgres:postgres@localhost:5432/pocso")
 
     redis_url: str = Field(default="redis://localhost:6379/0")
     celery_broker_url: str = Field(default="redis://localhost:6379/0")
@@ -35,15 +33,8 @@ class Settings(BaseSettings):
     sodium_secret_key: str = Field(default="")
     zk_verifier_salt: str = Field(default="")
 
-    hf_model_name: str = Field(default="unitary/toxic-bert")
-    hf_text_zero_shot_model_name: str = Field(default="facebook/bart-large-mnli")
-    hf_model_max_length: int = Field(default=256)
-    hf_image_model_name: str = Field(default="")
-    hf_image_zero_shot_model_name: str = Field(default="openai/clip-vit-base-patch32")
-    ai_use_zero_shot_text: bool = Field(default=True)
-    ai_use_zero_shot_image: bool = Field(default=True)
-    tf_image_model_path: str = Field(default="")
-    tf_prediction_index: int = Field(default=0)
+    gemini_api_key: str = Field(default="")
+    gemini_model: str = Field(default="gemini-2.0-flash")
     ai_max_image_bytes: int = Field(default=5 * 1024 * 1024)
     ai_ipfs_gateway_template: str = Field(default="https://{cid}.ipfs.w3s.link")
     ai_ipfs_fetch_timeout_seconds: float = Field(default=20.0)

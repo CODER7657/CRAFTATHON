@@ -26,19 +26,34 @@ function b64urlDecode(input: string): string {
 }
 
 function getSessionSecret(): string {
-  const secret = process.env.AUTH_SESSION_SECRET;
+  const secret = envTrim('AUTH_SESSION_SECRET');
   if (!secret) {
     throw new Error('Missing AUTH_SESSION_SECRET');
   }
   return secret;
 }
 
+/** Strip whitespace and optional surrounding quotes (common in .env copy-paste). */
+function envTrim(key: string): string | undefined {
+  const raw = process.env[key];
+  if (raw == null) {
+    return undefined;
+  }
+  let v = raw.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1);
+  }
+  return v.trim() || undefined;
+}
+
 function readAccount(index: 1 | 2): AuthorityAccount | null {
-  const email = process.env[`AUTH_USER_${index}_EMAIL` as const];
-  const passwordHash = process.env[`AUTH_USER_${index}_PASSWORD_HASH` as const];
-  const name = process.env[`AUTH_USER_${index}_NAME` as const];
-  const jurisdiction = process.env[`AUTH_USER_${index}_JURISDICTION` as const];
-  const authorityApiKey = process.env[`AUTH_USER_${index}_AUTHORITY_API_KEY` as const];
+  const email = envTrim(`AUTH_USER_${index}_EMAIL`);
+  const passwordHash =
+    envTrim(`AUTH_USER_${index}_PASSWORD_HASH`) || envTrim(`AUTH_USER_${index}_HASH`);
+  const name = envTrim(`AUTH_USER_${index}_NAME`);
+  const jurisdiction = envTrim(`AUTH_USER_${index}_JURISDICTION`);
+  const authorityApiKey =
+    envTrim(`AUTH_USER_${index}_AUTHORITY_API_KEY`) || envTrim(`AUTH_USER_${index}_API_KEY`);
 
   if (!email || !passwordHash || !name || !jurisdiction || !authorityApiKey) {
     return null;
@@ -69,8 +84,14 @@ export function getAccountById(accountId: string): AuthorityAccount | null {
 
 // Password hash format: "salt:hexDigest" where hexDigest = scrypt(password, salt, 64).
 export function verifyAccountPassword(account: AuthorityAccount, password: string): boolean {
-  const [salt, storedHex] = account.passwordHash.split(':');
-  if (!salt || !storedHex) {
+  const combined = account.passwordHash.trim();
+  const colon = combined.indexOf(':');
+  if (colon <= 0) {
+    return false;
+  }
+  const salt = combined.slice(0, colon).trim();
+  const storedHex = combined.slice(colon + 1).trim();
+  if (!salt || !storedHex || !/^[0-9a-f]+$/i.test(storedHex)) {
     return false;
   }
 

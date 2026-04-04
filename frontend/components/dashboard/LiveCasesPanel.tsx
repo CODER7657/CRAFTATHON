@@ -40,7 +40,7 @@ export default function LiveCasesPanel({
 
     const refresh = async () => {
       try {
-        const res = await fetch('/api/dashboard/cases', { cache: 'no-store' });
+        const res = await fetch('/portal/dashboard/cases', { cache: 'no-store' });
         const json = await res.json();
 
         if (!res.ok) {

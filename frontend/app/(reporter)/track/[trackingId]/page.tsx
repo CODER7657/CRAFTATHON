@@ -1,4 +1,5 @@
 import { getReportStatus } from '@/lib/api/report';
+import { TrackStatusAutoRefresh } from '@/components/reporter/TrackStatusAutoRefresh';
 import Link from 'next/link';
 import { Shield, Clock, CheckCircle2, Search, Users, FileCheck, ArrowLeft, Home } from 'lucide-react';
 import { formatDateTimeOrFallback } from '@/lib/date';
@@ -43,6 +44,12 @@ export default async function TrackingPage(props: { params: Promise<{ trackingId
     const riskLabel = statusInfo.aiLabel || 'review';
     const riskScore = statusInfo.riskScore;
     const basis = statusInfo.classificationBasis || 'pending';
+    const scoreLooksUnset =
+        (basis === 'pending' || basis === 'incomplete') &&
+        (riskScore === undefined || riskScore === 0);
+    const pollWhileScoring =
+        basis === 'pending' ||
+        (basis === 'incomplete' && (riskScore === undefined || riskScore === 0));
     const riskTone = riskLabel === 'harmful'
         ? 'bg-rose-50 border-rose-200 text-rose-700'
         : riskLabel === 'safe'
@@ -51,6 +58,7 @@ export default async function TrackingPage(props: { params: Promise<{ trackingId
 
     return (
         <div className="max-w-2xl mx-auto p-4 sm:p-6 animate-fade-in">
+            <TrackStatusAutoRefresh trackingId={trackingId} enabled={pollWhileScoring} />
             {/* Header */}
             <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center shadow-md">
@@ -120,9 +128,14 @@ export default async function TrackingPage(props: { params: Promise<{ trackingId
                             <span className="font-semibold uppercase tracking-wider text-xs">AI Risk Snapshot</span>
                             <span className="font-bold capitalize">{riskLabel}</span>
                         </div>
-                        {typeof riskScore === 'number' && (
+                        {typeof riskScore === 'number' && !scoreLooksUnset && (
                             <div className="text-sm font-medium">
                                 Internal score: {riskScore} / 100
+                            </div>
+                        )}
+                        {scoreLooksUnset && (
+                            <div className="text-sm font-medium">
+                                Internal score: not available yet
                             </div>
                         )}
                         {basis === 'text-only' && (
@@ -133,6 +146,16 @@ export default async function TrackingPage(props: { params: Promise<{ trackingId
                         {basis === 'pending' && (
                             <p className="text-xs opacity-90">
                                 Risk estimate is still being processed.
+                            </p>
+                        )}
+                        {basis === 'failed' && (
+                            <p className="text-xs opacity-90">
+                                Automated risk scoring did not complete. Authorities still receive your report.
+                            </p>
+                        )}
+                        {basis === 'incomplete' && (
+                            <p className="text-xs opacity-90">
+                                No AI breakdown was stored for this report (workers may be offline or the job did not finish). Try refreshing later; your submission is still on file.
                             </p>
                         )}
                         <p className="text-xs opacity-90">

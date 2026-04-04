@@ -1,0 +1,42 @@
+# =============================================================================
+# Caddyfile — Cloud VM Gateway (WireGuard → Local Machine)
+#
+# Topology:
+#   Internet → Cloud VM (public IP) → WireGuard tunnel → Local Machine (10.0.0.2)
+#
+# Local machine runs all Docker services; WireGuard peer IP = 10.0.0.2
+# This configuration proxies craft.0.xeze.org to the respective local containers.
+# =============================================================================
+
+craft.0.xeze.org {
+    # ---------------------------------------------------------------------------
+    # Backend API (FastAPI on 10.0.0.2:8010, app mounted at /api)
+    #
+    # IMPORTANT: use `handle`, not `handle_path`. `handle_path` strips the matched
+    # prefix, so /api/dashboard/cases became /dashboard/cases and FastAPI returned
+    # 404 (routes are registered as /api/dashboard/...).
+    # ---------------------------------------------------------------------------
+    handle /api/* {
+        reverse_proxy 10.0.0.2:8010 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # ---------------------------------------------------------------------------
+    # Frontend (Next.js web portal, proxying to 10.0.0.2 port 3000)
+    # ---------------------------------------------------------------------------
+    handle {
+        reverse_proxy 10.0.0.2:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Automatic HTTPS via Let's Encrypt / ZeroSSL
+    tls admin@xeze.org
+}

@@ -127,7 +127,15 @@ class BlockchainService:
             if "gas" not in tx:
                 tx["gas"] = self._web3.eth.estimate_gas(tx)
             signed = self._web3.eth.account.sign_transaction(tx, private_key=self._account.key)
-            tx_hash = self._web3.eth.send_raw_transaction(signed.raw_transaction)
+            raw_tx = getattr(signed, "raw_transaction", None) or getattr(signed, "rawTransaction", None)
+            if raw_tx is None:
+                raise AppError(
+                    code="blockchain_transaction_failed",
+                    message="Unable to submit blockchain transaction",
+                    status_code=502,
+                    details={"function": function_name, "reason": "missing_signed_raw_tx"},
+                )
+            tx_hash = self._web3.eth.send_raw_transaction(raw_tx)
             return self._web3.to_hex(tx_hash)
         except AppError:
             raise

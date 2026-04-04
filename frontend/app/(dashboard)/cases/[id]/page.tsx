@@ -3,6 +3,7 @@ import CaseActions from '@/components/dashboard/CaseActions';
 import { Shield, Clock, AlertTriangle, Cpu } from 'lucide-react';
 import { cookies } from 'next/headers';
 import { AUTH_SESSION_COOKIE, getAuthorityFromToken } from '@/lib/auth/session';
+import { getBackendApiUrl } from '@/lib/backend-url';
 import { formatDateTimeOrFallback } from '@/lib/date';
 
 type DashboardCase = {
@@ -16,9 +17,9 @@ type DashboardCase = {
 };
 
 async function fetchCase(trackingId: string, authorityKey: string): Promise<DashboardCase | null> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8010';
+  const apiBase = getBackendApiUrl();
 
-  const response = await fetch(`${apiBase}/api/dashboard/cases`, {
+  const response = await fetch(`${apiBase}/dashboard/cases`, {
     cache: 'no-store',
     headers: {
       'X-Authority-Api-Key': authorityKey,
@@ -35,9 +36,9 @@ async function fetchCase(trackingId: string, authorityKey: string): Promise<Dash
 }
 
 async function fetchCaseStatus(trackingId: string): Promise<any | null> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8010';
+  const apiBase = getBackendApiUrl();
 
-  const response = await fetch(`${apiBase}/api/report/status/${trackingId}`, {
+  const response = await fetch(`${apiBase}/report/status/${trackingId}`, {
     cache: 'no-store',
   });
   if (!response.ok) {
@@ -81,7 +82,7 @@ export default async function CaseDetailPage(props: { params: Promise<{ id: stri
   async function performAction(actionType: string) {
     'use server';
 
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8010';
+    const apiBase = getBackendApiUrl();
     const sessionToken = cookies().get(AUTH_SESSION_COOKIE)?.value;
     const sessionAccount = getAuthorityFromToken(sessionToken);
     if (!sessionAccount) {
@@ -95,7 +96,7 @@ export default async function CaseDetailPage(props: { params: Promise<{ id: stri
     };
 
     const action = actionMap[actionType] || 'reviewed';
-    const response = await fetch(`${apiBase}/api/authority/action`, {
+    const response = await fetch(`${apiBase}/authority/action`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

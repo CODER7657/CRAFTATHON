@@ -9,10 +9,10 @@ from PIL import Image
 from app.celery_app import celery
 from app.core.config import get_settings
 from app.core.errors import AppError
-from app.services.ai_pipeline import classify_report
+from app.services.ai_pipeline import classify_report, classify_report_fallback
 from app.services.blockchain import BlockchainService
 from app.services.ipfs import Web3StorageClient
-from app.services.supabase_service import SupabaseService
+from app.services.db_service import DBService
 from app.tasks.classification import apply_classification_result
 
 
@@ -52,7 +52,7 @@ def _image_base64_from_bytes(image_bytes: bytes) -> str | None:
 @celery.task(name="app.tasks.poll_report_submitted_events")
 def poll_report_submitted_events(from_block: int | None = None) -> dict[str, object]:
     settings = get_settings()
-    sb = SupabaseService()
+    sb = DBService()
     blockchain = BlockchainService()
     ipfs = Web3StorageClient()
 
@@ -111,8 +111,11 @@ def poll_report_submitted_events(from_block: int | None = None) -> dict[str, obj
             errors.append({"event_id": event_id, "error": "report_not_found", "cid": cid})
             continue
 
+        image_base64: str | None = None
+        image_content_type = "image/*"
         try:
             attachment_bytes, envelope = ipfs.fetch_and_decrypt_attachment(cid)
+            image_content_type = str(envelope.get("content_type") or "image/*")
             image_base64 = _image_base64_from_bytes(attachment_bytes)
             if image_base64 is None:
                 raise AppError(code="unsupported_attachment", message="Decrypted IPFS content is not a supported image", status_code=400)
@@ -122,7 +125,7 @@ def poll_report_submitted_events(from_block: int | None = None) -> dict[str, obj
                 report.get("source_url"),
                 image_cid=cid,
                 image_base64=image_base64,
-                image_content_type=str(envelope.get("content_type") or "image/*"),
+                image_content_type=image_content_type,
             )
             apply_classification_result(
                 sb=sb,
@@ -154,6 +157,49 @@ def poll_report_submitted_events(from_block: int | None = None) -> dict[str, obj
             )
             processed += 1
         except Exception as exc:
-            errors.append({"event_id": event_id, "cid": cid, "error": exc.__class__.__name__})
+            try:
+                result = classify_report_fallback(
+                    report.get("incident_text") or "",
+                    report.get("source_url"),
+                    image_base64=image_base64,
+                    image_content_type=image_content_type,
+                    image_cid=cid,
+                )
+                explanation = result["confidence_explanation"]
+                if isinstance(explanation, dict):
+                    explanation = {
+                        **explanation,
+                        "recovery": {
+                            "from": "blockchain_classify_failed",
+                            "error_type": exc.__class__.__name__,
+                        },
+                    }
+                    result = {**result, "confidence_explanation": explanation}
+
+                apply_classification_result(
+                    sb=sb,
+                    tracking_id=report["tracking_id"],
+                    result=result,
+                    source_url=report.get("source_url"),
+                )
+                sb.insert_audit_log(
+                    {
+                        "tracking_id": report["tracking_id"],
+                        "actor_type": "system",
+                        "action": "blockchain_report_submitted_processed",
+                        "metadata": {
+                            "event_id": event_id,
+                            "transaction_hash": event.get("transaction_hash"),
+                            "log_index": event.get("log_index"),
+                            "block_number": event.get("block_number"),
+                            "cid": cid,
+                            "recovered_heuristic": True,
+                            "original_error_type": exc.__class__.__name__,
+                        },
+                    }
+                )
+                processed += 1
+            except Exception:
+                errors.append({"event_id": event_id, "cid": cid, "error": exc.__class__.__name__})
 
     return {"start_block": start_block, "processed": processed, "skipped": skipped, "errors": errors}

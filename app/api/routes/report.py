@@ -1,26 +1,55 @@
+import json
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 
-from app.api.deps import get_supabase_service
+from app.api.deps import get_db_service
 from app.core.errors import AppError
 from app.schemas.common import SuccessResponse
 from app.schemas.report import ReportStatusResponse, ReportSubmitRequest, ReportSubmitResponse
 from app.services.blockchain import BlockchainService
 from app.services.ipfs import Web3StorageClient
 from app.services.security import verify_zk_proof_hash
-from app.services.supabase_service import SupabaseService
+from app.services.db_service import DBService
 from app.tasks.classification import classify_report_async
 
 
 router = APIRouter(prefix="/report", tags=["report"])
 
 
+def _classify_in_process_if_no_worker(tracking_id: str) -> None:
+    """Runs classification in the API process when Celery enqueue is unavailable (no broker/worker)."""
+    try:
+        classify_report_async.run(tracking_id=tracking_id)
+    except Exception:
+        pass
+
+
+def _json_if_stored_as_string(value: Any) -> Any:
+    """Postgres/psycopg may return JSONB as dict or, in some setups, as a JSON string."""
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if stripped[0] in "{[":
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                return value
+    return value
+
+
 @router.post("/submit", response_model=SuccessResponse[ReportSubmitResponse], status_code=status.HTTP_201_CREATED)
 async def submit_report(
     payload: ReportSubmitRequest,
-    supabase_service: SupabaseService = Depends(get_supabase_service),
+    background_tasks: BackgroundTasks,
+    db_service: DBService = Depends(get_db_service),
 ) -> SuccessResponse[ReportSubmitResponse]:
     if not verify_zk_proof_hash(report_hash=payload.report_hash, zk_proof_hash=payload.zk_proof_hash):
         raise AppError(code="invalid_zk_proof", message="ZK proof hash verification failed", status_code=400)
@@ -36,7 +65,7 @@ async def submit_report(
         )
 
     tracking_id = str(uuid4())
-    created = supabase_service.insert_report(
+    created = db_service.insert_report(
         {
             "tracking_id": tracking_id,
             "report_hash": payload.report_hash,
@@ -66,7 +95,7 @@ async def submit_report(
     except AppError:
         tx_hash = None
 
-    supabase_service.insert_audit_log(
+    db_service.insert_audit_log(
         {
             "tracking_id": tracking_id,
             "actor_type": "reporter",
@@ -75,11 +104,10 @@ async def submit_report(
         }
     )
 
-    # Always enqueue a baseline text classification from backend so reports never
-    # remain indefinitely in "submitted" if client-side classify trigger fails.
+    # Prefer Celery for scale; if the broker is down, fall back to in-process classification after respond.
     try:
         task = classify_report_async.delay(tracking_id=tracking_id)
-        supabase_service.insert_audit_log(
+        db_service.insert_audit_log(
             {
                 "tracking_id": tracking_id,
                 "actor_type": "system",
@@ -92,8 +120,7 @@ async def submit_report(
             }
         )
     except Exception as exc:
-        # Submission success should not depend on queue availability.
-        supabase_service.insert_audit_log(
+        db_service.insert_audit_log(
             {
                 "tracking_id": tracking_id,
                 "actor_type": "system",
@@ -101,6 +128,7 @@ async def submit_report(
                 "metadata": {"error_type": exc.__class__.__name__, "mode": "text_only_auto"},
             }
         )
+        background_tasks.add_task(_classify_in_process_if_no_worker, tracking_id)
 
     return SuccessResponse(
         data=ReportSubmitResponse(
@@ -115,22 +143,37 @@ async def submit_report(
 @router.get("/status/{tracking_id}", response_model=SuccessResponse[ReportStatusResponse])
 async def get_report_status(
     tracking_id: str,
-    supabase_service: SupabaseService = Depends(get_supabase_service),
+    db_service: DBService = Depends(get_db_service),
 ) -> SuccessResponse[ReportStatusResponse]:
-    report = supabase_service.get_report_by_tracking_id(tracking_id)
+    report = db_service.get_report_by_tracking_id(tracking_id)
     if not report:
         raise AppError(code="report_not_found", message="Tracking ID not found", status_code=404)
-    onchain_tx_hash = supabase_service.get_onchain_tx_hash(tracking_id)
+    onchain_tx_hash = db_service.get_onchain_tx_hash(tracking_id)
+    ai_expl = _json_if_stored_as_string(report.get("ai_explanation"))
+    meta = _json_if_stored_as_string(report.get("metadata"))
+    meta_conf = meta.get("confidence_explanation") if isinstance(meta, dict) else None
+    confidence_explanation = ai_expl or _json_if_stored_as_string(meta_conf)
+
+    risk_raw = report.get("risk_score")
+    risk_score: int | None
+    if risk_raw is None:
+        risk_score = None
+    else:
+        try:
+            risk_score = int(risk_raw)
+        except (TypeError, ValueError):
+            risk_score = None
+
     return SuccessResponse(
         data=ReportStatusResponse(
             tracking_id=tracking_id,
             status=report["status"],
-            risk_score=report.get("risk_score"),
+            risk_score=risk_score,
             ai_label=report.get("combined_label"),
             authority_action=report.get("authority_action"),
             created_at=report.get("created_at"),
             last_updated_at=report.get("updated_at") or report.get("created_at"),
             onchain_tx_hash=onchain_tx_hash,
-            confidence_explanation=report.get("ai_explanation") or report.get("metadata", {}).get("confidence_explanation"),
+            confidence_explanation=confidence_explanation,
         )
     )

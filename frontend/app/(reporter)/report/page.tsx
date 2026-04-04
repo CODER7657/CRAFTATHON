@@ -4,7 +4,8 @@ import { useState } from 'react';
 import ZKProofGenerator from '@/components/reporter/ZKProofGenerator';
 import EncryptionLayer from '@/components/reporter/EncryptionLayer';
 import { submitReport } from '@/lib/api/report';
-import { INDIA_STATES, buildJurisdictionCode } from '@/lib/indiaLocation';
+import { INDIA_STATES } from '@/lib/indiaLocation';
+import { getReportJurisdictionCode, isReportJurisdictionOverrideActive } from '@/lib/reportJurisdiction';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, UploadCloud, FileType, CheckCircle, ArrowRight, ArrowLeft, AlertTriangle, Loader2 } from 'lucide-react';
@@ -24,10 +25,8 @@ export default function ReportPage() {
     const handleNext = () => setStep(s => s + 1);
     const handlePrev = () => setStep(s => s - 1);
 
-    const computedJurisdictionCode =
-        stateCode && cityOrDistrict.trim()
-            ? buildJurisdictionCode(stateCode, cityOrDistrict)
-            : '';
+    const computedJurisdictionCode = getReportJurisdictionCode(stateCode, cityOrDistrict);
+    const jurisdictionOverride = isReportJurisdictionOverrideActive();
     const selectedState = INDIA_STATES.find((s) => s.code === stateCode);
 
     const handleSubmit = async (proof: string) => {
@@ -184,7 +183,19 @@ export default function ReportPage() {
                                     className="input-modern bg-navy-50"
                                 />
                                 <p className="mt-1 text-xs text-navy-400">
-                                    This code is generated automatically as IN-STATE-CITY and used for officer routing.
+                                    {jurisdictionOverride ? (
+                                        <>
+                                            Demo routing: every report uses the configured override so it appears in the
+                                            matching authority dashboard (e.g. MOCK-JURISDICTION).
+                                        </>
+                                    ) : (
+                                        <>
+                                            Generated as IN-STATE-CITY. Only authorities for this exact code see the case
+                                            in their portal—use the same jurisdiction as your officer account, or set{' '}
+                                            <code className="text-[10px] bg-navy-100 px-1 rounded">NEXT_PUBLIC_REPORT_JURISDICTION_OVERRIDE</code>{' '}
+                                            for demo installs.
+                                        </>
+                                    )}
                                 </p>
                             </div>
                             <div>
@@ -332,9 +343,14 @@ export default function ReportPage() {
                             <EncryptionLayer>
                                 <ZKProofGenerator onGenerate={handleSubmit} />
                                 {isSubmitting && (
-                                    <div className="mt-4 p-4 bg-gradient-to-r from-navy-800 to-navy-900 text-amber-400 rounded-xl flex items-center justify-center gap-3 animate-pulse font-semibold text-sm shadow-lg">
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        Submitting report with Zero-Knowledge verification...
+                                    <div className="mt-4 p-4 bg-gradient-to-r from-navy-800 to-navy-900 text-amber-400 rounded-xl flex flex-col items-center justify-center gap-2 animate-pulse font-semibold text-sm shadow-lg text-center">
+                                        <div className="flex items-center gap-3">
+                                            <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+                                            <span>Submitting report and running automated risk analysis…</span>
+                                        </div>
+                                        <span className="text-xs text-navy-300 font-normal max-w-md">
+                                            This can take up to a minute while the AI reviews your report.
+                                        </span>
                                     </div>
                                 )}
                             </EncryptionLayer>

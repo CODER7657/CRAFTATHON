@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_authority_context, get_supabase_service
+from app.api.deps import get_authority_context, get_db_service
 from app.schemas.common import SuccessResponse
 from app.schemas.dashboard import DashboardCase, DashboardCasesResponse
 from app.services.authority_auth import AuthorityContext
-from app.services.supabase_service import SupabaseService
+from app.services.db_service import DBService
 
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -13,9 +13,9 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get("/cases", response_model=SuccessResponse[DashboardCasesResponse])
 async def list_cases(
     authority: AuthorityContext = Depends(get_authority_context),
-    supabase_service: SupabaseService = Depends(get_supabase_service),
+    db_service: DBService = Depends(get_db_service),
 ) -> SuccessResponse[DashboardCasesResponse]:
-    rows = supabase_service.list_dashboard_cases(jurisdiction_code=authority.jurisdiction_code)
+    rows = db_service.list_dashboard_cases(jurisdiction_code=authority.jurisdiction_code)
     cases = [
         DashboardCase(
             tracking_id=str(row.get("tracking_id") or ""),

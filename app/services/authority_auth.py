@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from app.core.config import get_settings
 from app.core.errors import AppError
-from app.services.supabase_service import SupabaseService
+from app.services.db_service import DBService
 
 
 @dataclass
@@ -12,8 +12,8 @@ class AuthorityContext:
 
 
 class AuthorityAuthService:
-    def __init__(self, supabase_service: SupabaseService) -> None:
-        self._supabase = supabase_service
+    def __init__(self, db_service: DBService) -> None:
+        self._db = db_service
         self._settings = get_settings()
 
     def authenticate(self, api_key: str) -> AuthorityContext:
@@ -23,7 +23,7 @@ class AuthorityAuthService:
                 jurisdiction_code=self._settings.mock_authority_jurisdiction_code,
             )
 
-        authority = self._supabase.get_authority_by_api_key(api_key)
+        authority = self._db.get_authority_by_api_key(api_key)
         if authority is None:
             raise AppError(code="invalid_authority_key", message="Authority API key is invalid", status_code=401)
         if not authority.get("is_active", True):

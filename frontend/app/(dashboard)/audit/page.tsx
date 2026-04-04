@@ -1,6 +1,7 @@
 import { ScrollText, Shield, ExternalLink } from 'lucide-react';
 import { cookies } from 'next/headers';
 import { AUTH_SESSION_COOKIE, getAuthorityFromToken } from '@/lib/auth/session';
+import { getBackendApiUrl } from '@/lib/backend-url';
 import { formatDateTimeOrFallback } from '@/lib/date';
 
 type AuditLog = {
@@ -29,7 +30,7 @@ export default async function AuditPage() {
   }
 
   try {
-    const response = await fetch(`${apiBase}/api/dashboard/cases`, {
+    const response = await fetch(`${apiBase}/dashboard/cases`, {
       cache: 'no-store',
       headers: {
         'X-Authority-Api-Key': account.authorityApiKey,

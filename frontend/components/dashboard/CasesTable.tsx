@@ -153,7 +153,11 @@ export default function CasesTable({ cases }: { cases: Case[] }) {
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   ) : (
-                    <span className="text-navy-300">{['submitted', 'processing', 'review'].includes(c.status) ? 'Not logged yet' : 'Unavailable'}</span>
+                    <span className="text-navy-300">
+                      {['submitted', 'processing'].includes(c.status)
+                        ? 'Not logged yet'
+                        : 'On-chain pending'}
+                    </span>
                   )}
                 </td>
                 <td>

@@ -23,7 +23,7 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/portal/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -33,7 +33,11 @@ export default function LoginPage() {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body?.error?.message || 'Invalid credentials');
+        const msg =
+          body?.error?.message ||
+          body?.message ||
+          (response.status === 401 ? 'Invalid credentials' : `Sign-in failed (${response.status})`);
+        throw new Error(msg);
       }
 
       router.push('/analytics');
